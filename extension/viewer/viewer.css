@@ -16,7 +16,7 @@
     transition: 0.2s background-color;
   }
   body[theme="dark"] {
-    background-color: rgb(33, 37, 43);
+    background-color: rgb(0, 0, 0);
   }
 
   body[theme="sepia"] {
