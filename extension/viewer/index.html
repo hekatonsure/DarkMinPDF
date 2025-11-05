@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Viewer</title>
+    <link rel="stylesheet" href="viewer.css" />
+    <style>
+      /* Simple icon styles for download/settings buttons */
+      .icon-btn {
+        font-family: Arial, sans-serif;
+        font-weight: bold;
+      }
+      #settings-dropdown {
+        position: fixed;
+        right: 1em;
+        top: 4em;
+        background: white;
+        border-radius: 8px;
+        padding: 1em;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        min-width: 200px;
+      }
+      [theme="dark"] #settings-dropdown {
+        background-color: rgb(85, 85, 85);
+        color: white;
+      }
+      .setting-section {
+        margin: 0.5em 0;
+      }
+      .theme-circles {
+        display: flex;
+        gap: 0.5em;
+        justify-content: center;
+      }
+      .theme-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 2px solid #ccc;
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+      .theme-circle:hover {
+        border-color: #666;
+      }
+      .theme-circle.selected {
+        border-color: #333;
+        border-width: 3px;
+      }
+      [data-theme="light"] {
+        background-color: #fff;
+      }
+      [data-theme="sepia"] {
+        background-color: rgb(247, 231, 199);
+      }
+      [data-theme="dark"] {
+        background-color: rgb(33, 37, 43);
+      }
+      #invert-pdf-section {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+      }
+    </style>
+  </head>
+
+  <body theme="light">
+    <div id="progress-bar" class="viewer-ui"></div>
+
+    <div class="side-gutter" id="side-gutter-left">
+      <div id="page-counter" class="viewer-ui hidden">
+        Page <input type="number" min="1" value="1" /> of <span id="total">0</span>
+      </div>
+    </div>
+
+    <div class="side-gutter" id="side-gutter-right">
+      <button id="download-button" class="viewer-ui hidden icon-btn" title="Download PDF">⬇</button>
+      <button id="settings-button" class="viewer-ui hidden icon-btn" title="Settings">⚙</button>
+
+      <div id="settings-dropdown" class="viewer-ui" hidden>
+        <div class="setting-section theme-circles">
+          <button class="theme-circle selected" data-theme="light" title="Light theme"></button>
+          <button class="theme-circle" data-theme="sepia" title="Sepia theme"></button>
+          <button class="theme-circle" data-theme="dark" title="Dark theme"></button>
+        </div>
+        <div class="setting-section" id="invert-pdf-section">
+          <input type="checkbox" id="invert-pdf-checkbox" />
+          <label for="invert-pdf-checkbox">Invert colors</label>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="viewer.js"></script>
+  </body>
+</html>

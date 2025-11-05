@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "PDF Viewer with Dark Mode",
+  "version": "0.1.0",
+  "description": "View PDFs with dark mode support - based on Min browser's viewer",
+
+  "permissions": [
+    "declarativeNetRequest",
+    "storage"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "declarative_net_request": {
+    "rule_resources": [{
+      "id": "pdf_redirect",
+      "enabled": true,
+      "path": "rules/pdf-redirect.json"
+    }]
+  },
+
+  "web_accessible_resources": [{
+    "resources": [
+      "viewer/*",
+      "pdfjs/*"
+    ],
+    "matches": ["<all_urls>"]
+  }],
+
+  "action": {
+    "default_title": "PDF Viewer"
+  },
+
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  }
+}
