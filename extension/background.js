@@ -67,9 +67,9 @@ async function registerPdfRedirectRule() {
       action: ACTION_IGNORE_OTHER_RULES,
     },
     {
-      // Check Content-Disposition for main_frame with =download
+      // Respect Content-Disposition:attachment in main_frame (allow download)
       condition: {
-        urlFilter: "=download",
+        urlFilter: "*",
         resourceTypes: ["main_frame"],
         responseHeaders: [
           {

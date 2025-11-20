@@ -11,7 +11,8 @@
     "declarativeNetRequestWithHostAccess",
     "webNavigation",
     "storage",
-    "tabs"
+    "tabs",
+    "downloads"
   ],
 
   "host_permissions": [

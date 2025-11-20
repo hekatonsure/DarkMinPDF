@@ -393,15 +393,41 @@ async function drawPageCanvas(pageView) {
   textLayer.style.height = pageView.viewport.height + 'px';
   pageView.div.appendChild(textLayer);
 
-  // Simple text layer rendering
-  textContent.items.forEach(item => {
+  // Render text layer with proper transforms
+  const textLayerFrag = document.createDocumentFragment();
+  const textDivs = [];
+
+  for (const item of textContent.items) {
+    if (item.str === undefined) {
+      continue;
+    }
+
+    const tx = pdfjsLib.Util.transform(pageView.viewport.transform, item.transform);
+    const angle = Math.atan2(tx[1], tx[0]);
+    const fontSize = Math.hypot(tx[2], tx[3]);
+    const style = {
+      fontSize: `${fontSize}px`,
+      fontFamily: item.fontName || 'sans-serif',
+      left: `${tx[4]}px`,
+      top: `${tx[5] - fontSize}px`
+    };
+
+    if (angle !== 0) {
+      style.transform = `rotate(${angle}rad)`;
+    }
+
+    if (item.str.length > 1) {
+      style.width = `${Math.hypot(tx[0], tx[1]) * item.width}px`;
+    }
+
     const span = document.createElement('span');
     span.textContent = item.str;
-    span.style.left = item.transform[4] + 'px';
-    span.style.top = item.transform[5] + 'px';
-    span.style.fontSize = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]) + 'px';
-    textLayer.appendChild(span);
-  });
+    Object.assign(span.style, style);
+    textLayerFrag.appendChild(span);
+    textDivs.push(span);
+  }
+
+  textLayer.appendChild(textLayerFrag);
 }
 
 const updateCachedPages = throttle(function() {
@@ -487,6 +513,11 @@ pdfjsLib.getDocument({ url: pdfUrl, withCredentials: false })
 
       if (i === 1) {
         updateGutterWidths();
+
+        // Set initial zoom to make PDF take up 70% of window width
+        const targetWidth = window.innerWidth * 0.7;
+        const initialZoom = targetWidth / pageView.width;
+        setZoom(initialZoom);
       }
 
       // Draw canvas for pages in initial buffer
