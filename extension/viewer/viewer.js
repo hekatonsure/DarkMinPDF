@@ -29,7 +29,10 @@ let pageViews = [];
 let pageCount = 0;
 let currentPage = null;
 let pageBuffer = 15;
-let currentZoom = 1.0; // Zoom level (1.0 = 100%)
+let desiredZoom = 1.0; // What the user wants (1.0 = 100%)
+let baseRenderScale = 1.15; // Base scale used for initial rendering
+let currentRenderScale = baseRenderScale; // Current render resolution
+let lastZoomOriginY = 0; // Track zoom origin for consistent anchor across rerender
 
 // Utility functions (from Min's viewer.js)
 function debounce(fn, delay) {
@@ -218,44 +221,161 @@ const zoomOutBtn = document.getElementById('zoom-out');
 const zoomLevelDisplay = document.getElementById('zoom-level');
 
 function updateZoomDisplay() {
-  zoomLevelDisplay.textContent = Math.round(currentZoom * 100) + '%';
+  zoomLevelDisplay.textContent = Math.round(desiredZoom * 100) + '%';
 }
+
+// Apply CSS zoom with compensation for render scale changes
+function applyZoom() {
+  // CSS zoom = desiredZoom / (currentRenderScale / baseRenderScale)
+  // This compensates for render scale changes to maintain visual size
+  const cssZoom = desiredZoom / (currentRenderScale / baseRenderScale);
+
+  const pdfContainer = document.getElementById('pdf-container');
+  if (pdfContainer) {
+    // Set transform-origin to current viewport center so zoom feels natural
+    // The Y origin is the scroll position + half viewport height (center of view)
+    const originY = window.scrollY + window.innerHeight / 2;
+    lastZoomOriginY = originY;  // Save for use in debouncedRerender
+    pdfContainer.style.transformOrigin = `center ${originY}px`;
+    pdfContainer.style.transform = `scale(${cssZoom})`;
+  }
+}
+
+// Calculate what render scale we need for crisp display at a given zoom level
+function getTargetRenderScale(zoom) {
+  // The effective visual scale is renderScale * cssZoom
+  // We want to render at higher resolution when zoomed in significantly
+  // Thresholds determine when to bump up render quality
+  if (zoom <= 0.75) return baseRenderScale * 0.5;
+  if (zoom <= 1.25) return baseRenderScale;
+  if (zoom <= 2.0) return baseRenderScale * 1.5;
+  if (zoom <= 3.0) return baseRenderScale * 2.0;
+  return baseRenderScale * 2.5; // Max render scale for 300%+ zoom
+}
+
+// Debounced function to re-render pages at a new scale
+const debouncedRerender = debounce(async function(targetScale) {
+  if (pageViews.length === 0) return;
+
+  // Save old scale BEFORE changing it - needed to adjust coordinates
+  const oldScale = currentRenderScale;
+  currentRenderScale = targetScale;
+
+  // Update ALL pages unconditionally (no threshold check)
+  // This ensures all pages have the same renderScale
+  for (const pageView of pageViews) {
+    const newViewport = pageView.page.getViewport({ scale: targetScale });
+    pageView.viewport = newViewport;
+    pageView.renderScale = targetScale;
+    pageView.width = newViewport.width;
+    pageView.div.style.width = newViewport.width + 'px';
+    pageView.div.style.height = newViewport.height + 'px';
+    pageView.canvasWrapper.style.width = newViewport.width + 'px';
+    pageView.canvasWrapper.style.height = newViewport.height + 'px';
+
+    // Remove old text layer
+    const oldTextLayer = pageView.div.querySelector('.textLayer');
+    if (oldTextLayer) oldTextLayer.remove();
+  }
+
+  // Coordinate system changed! Must scale viewport CENTER position, not just scrollY
+  const scaleRatio = targetScale / oldScale;
+
+  // Disable transition for instant change (no animation stutter)
+  const pdfContainer = document.getElementById('pdf-container');
+  if (pdfContainer) {
+    pdfContainer.style.transition = 'none';
+  }
+
+  // The content at viewport center scales, but viewport height doesn't
+  const viewportCenterY = window.scrollY + window.innerHeight / 2;
+  const newScrollY = viewportCenterY * scaleRatio - window.innerHeight / 2;
+  window.scrollTo(0, Math.max(0, newScrollY));
+
+  // Now use fresh viewport center as origin (same content is now centered)
+  const newOriginY = window.scrollY + window.innerHeight / 2;
+  lastZoomOriginY = newOriginY;  // Update for consistency
+
+  // Apply CSS zoom with correct origin
+  const cssZoom = desiredZoom / (currentRenderScale / baseRenderScale);
+  if (pdfContainer) {
+    pdfContainer.style.transformOrigin = `center ${newOriginY}px`;
+    pdfContainer.style.transform = `scale(${cssZoom})`;
+
+    // Force reflow then re-enable transition
+    pdfContainer.offsetHeight;
+    pdfContainer.style.transition = '';
+  }
+  updateGutterWidths();
+
+  // Find all currently visible pages and ensure they have canvas
+  const ih = window.innerHeight;
+  const visiblePages = [];
+  for (const pageView of pageViews) {
+    const rect = pageView.div.getBoundingClientRect();
+    // Page is visible if it overlaps with viewport
+    if (rect.bottom > 0 && rect.top < ih) {
+      visiblePages.push(pageView);
+    }
+  }
+
+  // Redraw all visible pages (whether they had canvas or not)
+  for (const pageView of visiblePages) {
+    await drawPageCanvas(pageView);
+  }
+
+  // Also redraw other pages that had canvas (within buffer)
+  for (const pageView of pageViews) {
+    if (pageView.canvas && !visiblePages.includes(pageView)) {
+      await drawPageCanvas(pageView);
+    }
+  }
+
+  updateVisiblePages();
+}, 300);
 
 function setZoom(newZoom) {
   // Clamp zoom between 25% and 400%
-  currentZoom = Math.max(0.25, Math.min(4.0, newZoom));
+  desiredZoom = Math.max(0.25, Math.min(4.0, newZoom));
   updateZoomDisplay();
+  applyZoom();
 
-  // Apply zoom only to PDF container, not UI elements
-  const pdfContainer = document.getElementById('pdf-container');
-  if (pdfContainer) {
-    pdfContainer.style.transform = `scale(${currentZoom})`;
+  // Check if we need higher resolution rendering
+  const targetScale = getTargetRenderScale(desiredZoom);
+  if (pageViews.length > 0 && Math.abs(currentRenderScale - targetScale) > 0.1) {
+    debouncedRerender(targetScale);
   }
 }
 
 zoomInBtn.addEventListener('click', () => {
-  setZoom(currentZoom + 0.1);
+  setZoom(desiredZoom + 0.1);
 });
 
 zoomOutBtn.addEventListener('click', () => {
-  setZoom(currentZoom - 0.1);
+  setZoom(desiredZoom - 0.1);
 });
 
-// Keyboard shortcuts for zoom
+// Keyboard shortcuts for zoom - use capture phase to intercept Chrome's default zoom
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey) {
     if (e.key === '+' || e.key === '=') {
       e.preventDefault();
-      setZoom(currentZoom + 0.1);
+      e.stopPropagation();
+      setZoom(desiredZoom + 0.1);
+      return false;
     } else if (e.key === '-') {
       e.preventDefault();
-      setZoom(currentZoom - 0.1);
+      e.stopPropagation();
+      setZoom(desiredZoom - 0.1);
+      return false;
     } else if (e.key === '0') {
       e.preventDefault();
+      e.stopPropagation();
       setZoom(1.0);
+      return false;
     }
   }
-});
+}, { capture: true });
 
 updateZoomDisplay();
 
@@ -308,26 +428,10 @@ function createContainer() {
 async function renderPage(page, pageNumber) {
   const container = createContainer();
 
-  // Calculate scale
-  let scale = 1.15;
-  const minimumPageWidth = 625;
-
-  let viewport = page.getViewport({ scale });
-
-  if (viewport.width * 1.5 > window.innerWidth) {
-    scale = (window.innerWidth / viewport.width) * 0.75;
-    viewport = page.getViewport({ scale });
-  }
-
-  if (viewport.width * 1.33 < minimumPageWidth) {
-    scale = (minimumPageWidth / viewport.width) * scale * 0.75;
-    viewport = page.getViewport({ scale });
-  }
-
-  if (pageCount > 200) {
-    scale = Math.min(scale, 1.1);
-    viewport = page.getViewport({ scale });
-  }
+  // Use document-wide currentRenderScale for all pages
+  // This ensures uniform scale across the entire document
+  const scale = currentRenderScale;
+  const viewport = page.getViewport({ scale });
 
   // Create page div
   const pageDiv = document.createElement('div');
@@ -353,7 +457,8 @@ async function renderPage(page, pageNumber) {
     page,
     viewport,
     width: viewport.width,
-    pageNumber
+    pageNumber,
+    renderScale: scale  // Track what scale this page was rendered at
   };
 
   pageViews.push(pageView);
@@ -430,10 +535,55 @@ async function drawPageCanvas(pageView) {
   textLayer.appendChild(textLayerFrag);
 }
 
+// Re-render a page at a new scale for better quality at high zoom
+async function rerenderPageAtScale(pageView, newScale) {
+  // Get new viewport at the new scale
+  const newViewport = pageView.page.getViewport({ scale: newScale });
+
+  // Update pageView properties
+  pageView.viewport = newViewport;
+  pageView.renderScale = newScale;
+  pageView.width = newViewport.width;
+
+  // Update div/canvas sizes
+  pageView.div.style.width = newViewport.width + 'px';
+  pageView.div.style.height = newViewport.height + 'px';
+  pageView.canvasWrapper.style.width = newViewport.width + 'px';
+  pageView.canvasWrapper.style.height = newViewport.height + 'px';
+
+  // Remove old text layer if exists
+  const oldTextLayer = pageView.div.querySelector('.textLayer');
+  if (oldTextLayer) oldTextLayer.remove();
+
+  // Re-draw canvas (which also rebuilds text layer)
+  if (pageView.canvas) {
+    await drawPageCanvas(pageView);
+  }
+}
+
 const updateCachedPages = throttle(function() {
   if (currentPage == null) return;
 
+  // Helper to ensure page scale is synced before drawing
+  function syncPageScale(pageView) {
+    if (pageView.renderScale !== currentRenderScale) {
+      const newViewport = pageView.page.getViewport({ scale: currentRenderScale });
+      pageView.viewport = newViewport;
+      pageView.renderScale = currentRenderScale;
+      pageView.width = newViewport.width;
+      pageView.div.style.width = newViewport.width + 'px';
+      pageView.div.style.height = newViewport.height + 'px';
+      pageView.canvasWrapper.style.width = newViewport.width + 'px';
+      pageView.canvasWrapper.style.height = newViewport.height + 'px';
+
+      // Remove old text layer if scale changed
+      const oldTextLayer = pageView.div.querySelector('.textLayer');
+      if (oldTextLayer) oldTextLayer.remove();
+    }
+  }
+
   if (!pageViews[currentPage].canvas) {
+    syncPageScale(pageViews[currentPage]);
     drawPageCanvas(pageViews[currentPage]);
   }
 
@@ -446,6 +596,8 @@ const updateCachedPages = throttle(function() {
     }
 
     if (Math.abs(i - currentPage) < pageBuffer && !pageViews[i].canvas) {
+      // Ensure scale is synced before drawing
+      syncPageScale(pageViews[i]);
       drawPageCanvas(pageViews[i]);
     }
   }
@@ -504,7 +656,18 @@ pdfjsLib.getDocument({ url: pdfUrl, withCredentials: false })
     const metadata = await pdf.getMetadata();
     document.title = metadata.info.Title || pdfUrl.split('/').pop() || 'PDF Viewer';
 
-    // Render all pages
+    // Calculate initial scale BEFORE rendering any pages
+    // This ensures all pages use the same renderScale from the start
+    const firstPage = await pdf.getPage(1);
+    const tempViewport = firstPage.getViewport({ scale: baseRenderScale });
+    const targetWidth = window.innerWidth * 0.7;
+    const initialZoom = Math.max(0.25, Math.min(4.0, targetWidth / tempViewport.width));
+    desiredZoom = initialZoom;
+    currentRenderScale = getTargetRenderScale(desiredZoom);
+    updateZoomDisplay();
+    applyZoom();
+
+    // Render all pages with uniform scale
     for (let i = 1; i <= pageCount; i++) {
       const page = await pdf.getPage(i);
       progressBar.incrementProgress(1 / pageCount);
@@ -513,11 +676,6 @@ pdfjsLib.getDocument({ url: pdfUrl, withCredentials: false })
 
       if (i === 1) {
         updateGutterWidths();
-
-        // Set initial zoom to make PDF take up 70% of window width
-        const targetWidth = window.innerWidth * 0.7;
-        const initialZoom = targetWidth / pageView.width;
-        setZoom(initialZoom);
       }
 
       // Draw canvas for pages in initial buffer
