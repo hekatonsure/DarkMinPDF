@@ -1,7 +1,7 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 4,
   "name": "DarkMinPDF",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "PDF viewer ported from Min browser with dark mode themes",
   "author": "Your Name",
   "homepage_url": "https://github.com/hekatonsure/pdf-browser-chrome-extension",
