@@ -5,5 +5,3 @@ DarkMinPDF does not collect, store, transmit, or share any personal data, browsi
 This extension requires broad host permissions solely to intercept PDF requests and redirect them to the local viewer. No data leaves your browser.
 
 If this policy changes in the future, users will be notified via an extension update with revised documentation.
-
-**Last updated:** December 2024
