@@ -1,5 +1,5 @@
 {
-  "manifest_version": 4,
+  "manifest_version": 3,
   "name": "DarkMinPDF",
   "version": "0.4.0",
   "description": "PDF viewer ported from Min browser with dark mode themes",
