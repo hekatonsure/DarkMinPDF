@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DarkMinPDF</title>
+    <link rel="stylesheet" href="viewer.css" />
+    <style>
+      /* Simple icon styles for download/settings buttons */
+      .icon-btn {
+        font-family: Arial, sans-serif;
+        font-weight: bold;
+        font-size: 1.1em;  /* 10% bigger */
+      }
+      #settings-button {
+        font-size: 2.2em !important;  /* 2em * 1.1 = 2.2em */
+        position: fixed !important;
+        top: 1em !important;
+        right: 1.5em !important;
+        background: none !important;
+        border: none !important;
+        cursor: pointer;
+      }
+      #settings-dropdown {
+        position: fixed;
+        right: 1em;
+        top: 20.0em;  
+        background: white;
+        border-radius: 8px;
+        padding: 1.1em;  /* 1em * 1.1 */
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        min-width: 220px;  /* 200px * 1.1 */
+        font-size: 1.1em;
+      }
+      [theme="dark"] #settings-dropdown {
+        background-color: rgb(85, 85, 85);
+        color: white;
+      }
+      /* Zoom controls - right below gear icon */
+      #zoom-controls {
+        position: fixed;
+        top: 5em;  /* Just below gear icon */
+        right: 1.5em;
+        background: white;
+        border-radius: 25px;
+        padding: 0.55em 0.825em;  /* 0.5em * 1.1, 0.75em * 1.1 */
+        display: flex;
+        align-items: center;
+        gap: 0.55em;  /* 0.5em * 1.1 */
+        box-shadow: 1px 2px 5px 0 rgba(0, 0, 0, 0.15);
+        transition: 0.2s opacity;
+        font-size: 1.1em;
+      }
+      [theme="dark"] #zoom-controls {
+        background-color: rgb(85, 85, 85);
+        color: white;
+      }
+      #zoom-controls.hidden {
+        opacity: 0;
+      }
+      .zoom-btn {
+        appearance: none;
+        border: none;
+        background: none;
+        font-size: 1.5em;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 0 0.25em;
+        line-height: 1;
+        color: inherit;
+      }
+      .zoom-btn:hover {
+        opacity: 0.7;
+      }
+      #zoom-level {
+        font-size: 0.9em;
+        min-width: 3.5em;
+        text-align: center;
+        font-weight: bold;
+      }
+      #page-counter {
+        font-size: 1.1em;  /* 10% bigger */
+      }
+      #download-button {
+        font-size: 1.65em;  /* 1.5em * 1.1 */
+      }
+      .setting-section {
+        margin: 0.5em 0;
+      }
+      .theme-circles {
+        display: flex;
+        gap: 0.5em;
+        justify-content: center;
+      }
+      .theme-circle {
+        width: 35px;  /* 32px * 1.1 */
+        height: 35px;
+        border-radius: 50%;
+        border: 2.2px solid #ccc;  /* 2px * 1.1 */
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+      .theme-circle:hover {
+        border-color: #666;
+      }
+      .theme-circle.selected {
+        border-color: #333;
+        border-width: 3.3px;  /* 3px * 1.1 */
+      }
+      [data-theme="light"] {
+        background-color: #fff;
+      }
+      [data-theme="sepia"] {
+        background-color: rgb(247, 231, 199);
+      }
+      [data-theme="dark"] {
+        background-color: rgb(33, 37, 43);
+      }
+      #invert-pdf-section {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+      }
+      #invert-pdf-checkbox {
+        width: 1.3em;  /* Slightly larger */
+        height: 1.3em;
+        cursor: pointer;
+      }
+      #invert-pdf-section label {
+        cursor: pointer;
+      }
+      /* Container for PDF pages - this will be zoomed, not the UI */
+      #pdf-container {
+        transform-origin: top center;
+        transition: transform 0.2s;
+      }
+    </style>
+  </head>
+
+  <body theme="light">
+    <div id="progress-bar" class="viewer-ui"></div>
+
+    <div class="side-gutter" id="side-gutter-left">
+      <div id="page-counter" class="viewer-ui hidden">
+        Page <input type="number" min="1" value="1" /> of <span id="total">0</span>
+      </div>
+    </div>
+
+    <div class="side-gutter" id="side-gutter-right">
+      <button id="settings-button" class="viewer-ui hidden icon-btn" title="Settings">⚙</button>
+
+      <div id="zoom-controls" class="viewer-ui hidden">
+        <button id="zoom-out" class="zoom-btn" title="Zoom out">−</button>
+        <span id="zoom-level">100%</span>
+        <button id="zoom-in" class="zoom-btn" title="Zoom in">+</button>
+      </div>
+
+      <button id="download-button" class="viewer-ui hidden icon-btn" title="Download PDF">⬇</button>
+
+      <div id="settings-dropdown" class="viewer-ui" hidden>
+        <div class="setting-section theme-circles">
+          <button class="theme-circle selected" data-theme="light" title="Light theme"></button>
+          <button class="theme-circle" data-theme="sepia" title="Sepia theme"></button>
+          <button class="theme-circle" data-theme="dark" title="Dark theme"></button>
+        </div>
+        <div class="setting-section" id="invert-pdf-section">
+          <input type="checkbox" id="invert-pdf-checkbox" />
+          <label for="invert-pdf-checkbox">Dark Mode: Invert</label>
+        </div>
+        <div class="setting-section" style="font-size: 0.85em; opacity: 0.7; margin-top: 1em; border-top: 1px solid currentColor; padding-top: 0.75em;">
+          <div><strong>Zoom:</strong> Ctrl + / Ctrl −</div>
+          <div><strong>Reset:</strong> Ctrl 0</div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="viewer.js"></script>
+  </body>
+</html>

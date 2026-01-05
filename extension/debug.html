@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PDF Viewer Debug</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    .section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+    button { padding: 10px; margin: 5px; }
+    pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+    .error { color: red; }
+    .success { color: green; }
+  </style>
+</head>
+<body>
+  <h1>PDF Viewer Extension Debug</h1>
+
+  <div class="section">
+    <h2>1. Check DNR Rules</h2>
+    <button onclick="checkRules()">Check Rules</button>
+    <pre id="rules-output">Click button to check...</pre>
+  </div>
+
+  <div class="section">
+    <h2>2. Check Permissions</h2>
+    <button onclick="checkPermissions()">Check Permissions</button>
+    <pre id="perms-output">Click button to check...</pre>
+  </div>
+
+  <div class="section">
+    <h2>3. Test URL Matching</h2>
+    <input type="text" id="test-url" value="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf" style="width: 500px;">
+    <button onclick="testUrl()">Test URL</button>
+    <pre id="url-output">Enter URL and click test...</pre>
+  </div>
+
+  <div class="section">
+    <h2>4. Re-register Rules</h2>
+    <button onclick="reregisterRules()">Force Re-register</button>
+    <pre id="register-output">Click to force re-registration...</pre>
+  </div>
+
+  <div class="section">
+    <h2>5. Test PDF Link</h2>
+    <a href="https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf" target="_blank">
+      Click to open test PDF
+    </a>
+  </div>
+
+  <script>
+    async function checkRules() {
+      const output = document.getElementById('rules-output');
+      try {
+        const dynamicRules = await chrome.declarativeNetRequest.getDynamicRules();
+        const sessionRules = await chrome.declarativeNetRequest.getSessionRules();
+
+        output.innerHTML = `Dynamic Rules: ${dynamicRules.length}\n` +
+          JSON.stringify(dynamicRules, null, 2) + '\n\n' +
+          `Session Rules: ${sessionRules.length}\n` +
+          JSON.stringify(sessionRules, null, 2);
+
+        output.className = dynamicRules.length > 0 ? 'success' : 'error';
+      } catch (e) {
+        output.innerHTML = 'Error: ' + e.message;
+        output.className = 'error';
+      }
+    }
+
+    async function checkPermissions() {
+      const output = document.getElementById('perms-output');
+      try {
+        const perms = await chrome.permissions.getAll();
+        output.innerHTML = 'Permissions:\n' + JSON.stringify(perms.permissions, null, 2) +
+          '\n\nHost Permissions:\n' + JSON.stringify(perms.origins, null, 2);
+      } catch (e) {
+        output.innerHTML = 'Error: ' + e.message;
+        output.className = 'error';
+      }
+    }
+
+    function testUrl() {
+      const output = document.getElementById('url-output');
+      const url = document.getElementById('test-url').value;
+
+      const patterns = [
+        { name: 'HTTP/HTTPS PDF', regex: /^https?:\/\/.*\.pdf(\?.*)?$/i },
+        { name: 'File PDF', regex: /^file:\/\/.*\.pdf$/i },
+        { name: 'Any PDF', regex: /\.pdf(\?.*)?$/i }
+      ];
+
+      let results = `Testing URL: ${url}\n\n`;
+      patterns.forEach(p => {
+        const matches = p.regex.test(url);
+        results += `${p.name}: ${matches ? '✓ MATCH' : '✗ NO MATCH'}\n`;
+      });
+
+      output.innerHTML = results;
+    }
+
+    async function reregisterRules() {
+      const output = document.getElementById('register-output');
+      try {
+        output.innerHTML = 'Sending message to background worker...';
+
+        const response = await chrome.runtime.sendMessage({ action: 'reregisterRules' });
+        output.innerHTML = 'Response: ' + JSON.stringify(response, null, 2);
+        output.className = 'success';
+
+        // Wait and check rules
+        setTimeout(checkRules, 500);
+      } catch (e) {
+        output.innerHTML = 'Error: ' + e.message;
+        output.className = 'error';
+      }
+    }
+
+    // Auto-run checks on load
+    window.onload = () => {
+      checkRules();
+      checkPermissions();
+    };
+  </script>
+</body>
+</html>
