@@ -694,6 +694,16 @@ pdfjsLib.getDocument({ url: pdfUrl, withCredentials: false })
   })
   .catch(err => {
     console.error('Error loading PDF:', err);
+
+    // Auth errors (401/403) - fallback to Chrome's native PDF viewer
+    const isAuthError = err.status === 401 || err.status === 403;
+    if (isAuthError) {
+      const separator = pdfUrl.includes('?') ? '&' : '?';
+      window.location.href = pdfUrl + separator + 'pdfjs.action=download';
+      return;
+    }
+
+    // Other errors - show error UI
     document.body.innerHTML = `
       <div style="padding: 2em; text-align: center;">
         <h2>Error loading PDF</h2>
